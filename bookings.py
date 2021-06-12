@@ -1258,7 +1258,7 @@ if __name__ == "__main__":
     text_files = [f for f in os.listdir(
         f"{absolutePath}/Profiles") if f.endswith('.json')]
     for file in text_files:
-        if file.startswith('$'):
+        if file.startswith('~$'):
             pass
         else:
             with open(f"Profiles/{file}", "r") as f:
