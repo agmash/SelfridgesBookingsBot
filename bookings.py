@@ -1,4 +1,10 @@
-import requests, json, time, os, sys, random
+import requests
+import json
+import time
+import os
+import sys
+import random
+import multiprocessing
 from datetime import date, timedelta
 from Classes.discord_hooks import Webhook
 from Classes.logger import Logger
@@ -6,20 +12,22 @@ from pathlib import Path
 from threading import Thread
 from random import randint
 
+
 class SelfridgesBookingCheckout:
-    def __init__(self, profileJson, profileIndex=None, proxy=None, data=None):
-
-        #self.jsonIndex = profileIndex
-        self.proxy = proxy #Singular proxy, define the proxy json beforehand
+    def __init__(self, profileJson, profileIndex=None, proxy=None, data=None, fileData=None):
+        self.hooks = [x.strip() for x in open("webhooks.txt").readlines()]
+        # self.jsonIndex = profileIndex
+        self.proxy = proxy  # Singular proxy, define the proxy json beforehand
         self.dayIncrease = 0
-        self.timeslotTries = 0 
+        self.timeslotTries = 0
+        self.fileData = fileData
 
-        #Extract Profile Data
+        # Extract Profile Data
         self.profileJson = profileJson
         self.ProfileName = self.profileJson["ProfileName"]
-        self.firstName = self.profileJson["First Name"]
-        self.lastName = self.profileJson["Last Name"]
-        self.Email = self.profileJson["Email"]
+        self.firstName = self.profileJson["First Name"].title()
+        self.lastName = self.profileJson["Last Name"].title()
+        self.Email = self.profileJson["Email"].lower()
         self.Phone = self.profileJson["Phone"]
         self.Instagram = self.profileJson["Instagram"]
         self.timePreferences = self.profileJson["Time Preferences"]
@@ -45,15 +53,16 @@ class SelfridgesBookingCheckout:
             self.duration = data["Booking Timestep"]
             self.eventDescription = data["Event Description"]
             self.questionData = data["Question Data"]
-        
+
         if self.storeID == "37463":
             self.storeName = "The Yellow Drop"
             self.storeImage = "https://images.selfridges.com/is/image/selfridges/2103_TYDS_LOGO?qlt=100&fmt=jpg&scl=1"
-        
+
         elif self.storeID == "37453":
             self.storeName = "Offspring"
             self.storeImage = "https://images.selfridges.com/is/image/selfridges/2104_APPT_OFFSPRING?qlt=100&fmt=jpg&scl=1"
-        
+            self.questionData = "https://selfridges.bookingbug.com/api/v1/37453/questions?detail_group_id=19309"
+
         elif self.storeID == "37250":
             self.storeName = "Aqua Di Parma"
             self.storeImage = "http://images.selfridges.com/is/image/selfridges/ACD_BOOKING?qlt=80&fmt=jpg&scl=1"
@@ -69,8 +78,6 @@ class SelfridgesBookingCheckout:
             self.storeName = f"Selfridges Bookings | Store ID: {self.storeID}"
             self.storeImage = "https://bookings.selfridges.com/selfridges-body-denim/images/selfridges-logo.png"
 
-            
-        
         self.eventURL = f"https://bookings.selfridges.com/selfridges-body-denim/new_booking.html?companyId={self.storeID}"
 
     def timesIndex(self):
@@ -90,29 +97,32 @@ class SelfridgesBookingCheckout:
                 "20-21": "1200-1260",
                 "21-22": "1260-1320",
                 "ALL": "60-1440",
-                "":"60-1440",
+                "": "60-1440",
             }
             timeidRange = times[timePrefRange]
             self.SuitableTimeRanges.append(timeidRange)
         return self.SuitableTimeRanges
-    
+
     def createSession(self):
         self.s = requests.session()
         if self.proxy == None:
             pass
         else:
-            self.s.proxies.update(self.proxy)    
-    
+            self.s.proxies.update(self.proxy)
+
     def getEventTimes(self):
-        log = Logger(f"Event Times {self.storeID}| {self.ProfileName}").log
+        log = Logger(
+            f"Event Times {self.storeID}| {self.fileData} | {self.ProfileName}").log
         gottenEventTimes = False
         while gottenEventTimes == False:
             try:
                 startDate = (date.today() + timedelta(days=self.dayIncrease))
                 endDate = (startDate + timedelta(days=7))
-                log(f"{startDate} {endDate}", file=self.fileDir, messagePrint=False)
+                log(f"{startDate} {endDate}",
+                    file=self.fileDir, messagePrint=False)
                 url = f"https://selfridges.bookingbug.com/api/v1/{self.storeID}/time_data?service_id={self.serviceID}&date={startDate}&end_date={endDate}&duration={self.duration}"
-                log("Sending get request for event times using URL: {url}", file=self.fileDir, messagePrint=False)
+                log("Sending get request for event times using URL: {url}",
+                    file=self.fileDir, messagePrint=False)
                 headers = {
                     'Connection': 'keep-alive',
                     'sec-ch-ua': '" Not A;Brand";v="99", "Chromium";v="90", "Google Chrome";v="90"',
@@ -123,15 +133,19 @@ class SelfridgesBookingCheckout:
                     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36',
                     'Origin': 'https://bookings.selfridges.com',
                     'Referer': 'https://bookings.selfridges.com/',
-                    'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8', 
+                    'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
                 }
-                response = self.s.get(url, headers=headers, allow_redirects=False, timeout=45)
+                response = self.s.get(
+                    url, headers=headers, allow_redirects=False, timeout=45)
                 if 200 <= response.status_code <= 299:
-                    log("Get request for event times successfully sent!", file=self.fileDir, messagePrint=False)
+                    log("Get request for event times successfully sent!",
+                        file=self.fileDir, messagePrint=False)
                     jsonData = json.loads(response.text)
                     self.eventTimeSlots = []
                     data = jsonData["_embedded"]["events"]
                     for i in data:
+                        # print(i)
+                        # time.sleep(1000)
                         dayTimeSlots = i["times"]
                         eventDate = i["date"]
                         eventID = i["event_id"]
@@ -147,42 +161,51 @@ class SelfridgesBookingCheckout:
                                 "slotTimeNumber": slotTimeNumber,
                             }
                             self.eventTimeSlots.append(timedata)
-                    
+
                     if self.eventTimeSlots != []:
-                        gottenEventTimes = True 
-                        log(f"Received event times:\n{self.eventTimeSlots}", color="blue", file=self.fileDir, messagePrint=False)
+                        gottenEventTimes = True
+                        log(f"Received event times:\n{self.eventTimeSlots}",
+                            color="blue", file=self.fileDir, messagePrint=False)
                         return self.eventTimeSlots
                     else:
-                        log(f"No event times founds retrying...:\n{self.eventTimeSlots}", color="magenta", file=self.fileDir, messagePrint=False)
+                        log(f"No event times founds retrying...:\n{self.eventTimeSlots}",
+                            color="magenta", file=self.fileDir, messagePrint=False)
                         continue
-                
+
                 elif 400 <= response.status_code <= 499:
                     jsonData = json.loads(response.text)
                     if jsonData["error"] == "No bookable events found":
-                        log(f"No timeslots loaded...", file=self.fileDir, messagePrint=True)
+                        log(f"No timeslots loaded...",
+                            file=self.fileDir, messagePrint=True)
                     else:
-                        log(f"Unknown 4xx error: {response.status_code} | {response.text} ", file=self.fileDir, messagePrint=True)
+                        log(f"Unknown 4xx error: {response.status_code} | {response.text} ",
+                            file=self.fileDir, messagePrint=True)
                     continue
 
                 elif 500 <= response.status_code <= 599:
-                    log(f"Retrying getting event times: {response.status_code}", color='magenta', file=self.fileDir, messagePrint=True)
+                    log(f"Retrying getting event times: {response.status_code}",
+                        color='magenta', file=self.fileDir, messagePrint=True)
                     continue
-                
+
                 else:
-                    log(f"Unknown error get event times: {response.status_code}", color="magenta", file=self.fileDir, messagePrint=False)
+                    log(f"Unknown error get event times: {response.status_code}",
+                        color="magenta", file=self.fileDir, messagePrint=False)
                     continue
-        
+
             except Exception as e:
                 exc_type, exc_obj, exc_tb = sys.exc_info()
                 filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=True) 
-    
-    def suitableTimeSlot(self):  
-        log = Logger(f"Suitable Time Slot | {self.ProfileName}").log         
+                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
+                    exc_obj, filename, e), file=self.fileDir, messagePrint=True)
+
+    def suitableTimeSlot(self):
+        log = Logger(
+            f"Suitable Time Slot | {self.fileData} | {self.ProfileName}").log
         gotSuitableTime = False
         while gotSuitableTime == False:
             try:
-                log("Selecting timeslot...", color='yellow', file=self.fileDir, messagePrint=True)
+                log("Selecting timeslot...", color='yellow',
+                    file=self.fileDir, messagePrint=True)
                 timeSlotData = self.eventTimeSlots.pop(0)
             except IndexError as e:
                 self.getEventTimes()
@@ -194,25 +217,30 @@ class SelfridgesBookingCheckout:
                         min = int(i.split("-")[0])
                         max = int(i.split("-")[1])
                         if min <= eventSlotTimeNumber <= max:
-                            log(f"Time slot selected! Preferences matched!: {eventSlotTimeNumber}", color='yellow', file=self.fileDir, messagePrint=True)
+                            log(f"Time slot selected! Preferences matched!: {eventSlotTimeNumber}",
+                                color='yellow', file=self.fileDir, messagePrint=True)
                             gotSuitableTime = True
                             return timeSlotData
                         else:
-                            log(f"Time slot DOES NOT match preferrences!: {eventSlotTimeNumber}", color='magenta', file=self.fileDir, messagePrint=True)
-                    
+                            log(f"Time slot DOES NOT match preferrences!: {eventSlotTimeNumber}",
+                                color='magenta', file=self.fileDir, messagePrint=True)
+
                     self.timeslotTries += 1
                 else:
-                    log(f"No preferences matched after 15 tries, selecting first available time!: {eventSlotTimeNumber}", color='yellow', file=self.fileDir, messagePrint=True)
+                    log(
+                        f"No preferences matched after 15 tries, selecting first available time!: {eventSlotTimeNumber}", color='yellow', file=self.fileDir, messagePrint=True)
                     gotSuitableTime = True
                     return timeSlotData
-                    
+
             except Exception as e:
                 exc_type, exc_obj, exc_tb = sys.exc_info()
                 filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=True)       
-    
+                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
+                    exc_obj, filename, e), file=self.fileDir, messagePrint=True)
+
     def cartTimeSlot(self):
-        log = Logger(f"Cart Time Slot | {self.ProfileName}").log
+        log = Logger(
+            f"Cart Time Slot | {self.fileData} | {self.ProfileName}").log
         cartSuccessful = False
         while cartSuccessful == False:
             try:
@@ -220,8 +248,10 @@ class SelfridgesBookingCheckout:
                 self.eventSlotTimeNumber = int(timeSlotData["slotTimeNumber"])
                 self.eventID = timeSlotData["Event ID"]
                 self.eventDate = timeSlotData["Event Date"]
-                self.eventSlotDate = timeSlotData["slotDate"].replace("+", ".000Z").split("Z")[0] + "Z"
+                self.eventSlotDate = timeSlotData["slotDate"].replace(
+                    "+", ".000Z").split("Z")[0] + "Z"
                 self.referenceID = f"10{random.randint(11111111, 99999999)}"
+                log(f"Set, eventSlotTimeNumber: {self.eventSlotTimeNumber} | eventID: {self.eventID} | eventDate: {self.eventDate} | eventSlotDate: {self.eventSlotDate} | referenceID: {self.referenceID}", file=self.fileDir, messagePrint=False)
 
                 headers = {
                     'Host': 'selfridges.bookingbug.com',
@@ -241,18 +271,18 @@ class SelfridgesBookingCheckout:
                 )
                 data = {
                     "entire_basket": True,
-                    "items":[
-                    {
-                        "date": self.eventDate,
-                        "time": self.eventSlotTimeNumber,
-                        "event_id": self.eventID,
-                        "price": None,
-                        "book":f"https://selfridges.bookingbug.com/api/v1/{self.storeID}/basket/add_item?service_id={self.serviceID}",
-                        "duration": self.duration,
-                        "settings": {
-                            "resource":-1,
-                            "person":-1,
-                            "earliest_time": self.eventSlotDate
+                    "items": [
+                        {
+                            "date": self.eventDate,
+                            "time": self.eventSlotTimeNumber,
+                            "event_id": self.eventID,
+                            "price": None,
+                            "book": f"https://selfridges.bookingbug.com/api/v1/{self.storeID}/basket/add_item?service_id={self.serviceID}",
+                            "duration": self.duration,
+                            "settings": {
+                                "resource": -1,
+                                "person": -1,
+                                "earliest_time": self.eventSlotDate
                             },
                             "service_id": self.serviceID,
                             "ref": int(self.referenceID)
@@ -260,309 +290,341 @@ class SelfridgesBookingCheckout:
                     ]
                 }
                 dataMetric = json.dumps(data, separators=(',', ':'))
-                response = self.s.post(f'https://selfridges.bookingbug.com/api/v1/{self.storeID}/basket/add_item', headers=headers, params=params, data=dataMetric)
-                log(response.request.body, color="yellow", file="Logs/Bookings", messagePrint=False)
+                log(f"Submitting slot time to cart... {dataMetric}",
+                    file=self.fileDir, messagePrint=False)
+                response = self.s.post(
+                    f'https://selfridges.bookingbug.com/api/v1/{self.storeID}/basket/add_item', headers=headers, params=params, data=dataMetric)
+                # log(response.request.body, color="yellow", file="Logs/Bookings", messagePrint=False)
                 if response.status_code == 201 or response.status_code == '201':
-                   
                     self.authTokenHeader = response.headers["Auth-Token"]
                     self.uidTokenHeader = response.headers["uid"]
+                    log(
+                        f"Set from response, Auth Token Header: {self.authTokenHeader}")
 
-                    #print(self.authTokenHeader, self.uidTokenHeader)
-                    #log(response.headers, file=self.fileDir, messagePrint=True)
+                    # print(self.authTokenHeader, self.uidTokenHeader)
+                    # log(response.headers, file=self.fileDir, messagePrint=True)
 
                     jsonData = json.loads(response.text)
                     try:
                         if jsonData["_embedded"]["items"][0]["ref"] == int(self.referenceID) or jsonData["_embedded"]["items"][0]["ref"] == self.referenceID:
-                            log(f"Succesfully added slot time to cart: {self.eventName} at {self.eventSlotDate}", color='green', file=self.fileDir, messagePrint=True)
+                            log(f"Succesfully added slot time to cart: {self.eventName} at {self.eventSlotDate}",
+                                color='green', file=self.fileDir, messagePrint=True)
                             responsedata = jsonData["_embedded"]["items"][0]
                             self.checkoutID = responsedata["id"]
-                            self.personID = responsedata["person_id"]
-                            self.resourceID = responsedata["resource_id"]
-                            self.status = responsedata["status"]
-                            self.earliestTime = responsedata["settings"]["earliest_time"]
-                            cartSuccessful = True 
+                            try:
+                                self.personID = responsedata["person_id"]
+                            except KeyError:
+                                self.personID == None
+                            try:
+                                self.resourceID = responsedata["resource_id"]
+                            except KeyError:
+                                self.resourceID == None
+                            try:
+                                self.status = responsedata["status"]
+                            except KeyError:
+                                self.status == None
+                            try:
+                                self.earliestTime = responsedata["settings"]["earliest_time"]
+                            except KeyError:
+                                self.earliestTime == None
+                            cartSuccessful = True
 
                     except IndexError or KeyError as e:
-                        log(f"Unsucessfully added to cart: {self.eventName} at {self.eventSlotDate} {self.eventSlotDate}", color='red', file=self.fileDir, messagePrint=True)
-                
+                        log(f"Unsucessfully added to cart: {self.eventName} at {self.eventSlotDate} {self.eventSlotDate}",
+                            color='red', file=self.fileDir, messagePrint=True)
+
                 elif response.status_code == 409 or response.status_code == '409':
                     jsonData = json.loads(response.text)
                     if jsonData["error"] == 'No Space Left':
-                        log("Time slot unavailable, selecting new time slot...", color='magenta', file=self.fileDir, messagePrint=True)
+                        log("Time slot unavailable, selecting new time slot...",
+                            color='magenta', file=self.fileDir, messagePrint=True)
                         self.getEventTimes()
                         continue
 
                     elif jsonData["error"] == 'Min advance time passed':
-                        log("Can't checkout... Time slot too soon, selecting new time slot", color='magenta', file=self.fileDir, messagePrint=True)
+                        log("Can't checkout... Time slot too soon, selecting new time slot",
+                            color='magenta', file=self.fileDir, messagePrint=True)
                         self.dayIncrease = 2
                         self.getEventTimes()
                         continue
 
                 elif 500 <= response.status_code <= 599:
-                    log(f"Retrying adding slot to cart: {response.status_code}", color='magenta', file=self.fileDir, messagePrint=True)
+                    log(f"Retrying adding slot to cart: {response.status_code}",
+                        color='magenta', file=self.fileDir, messagePrint=True)
                     continue
-    
+
                 else:
-                    log(f"{response.status_code}, {response.text}", color='red', file=self.fileDir, messagePrint=True)
+                    log(f"{response.status_code}, {response.text}",
+                        color='red', file=self.fileDir, messagePrint=True)
 
             except Exception as e:
                 exc_type, exc_obj, exc_tb = sys.exc_info()
                 filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=True)  
-    
+                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
+                    exc_obj, filename, e), file=self.fileDir, messagePrint=True)
+
     def setCheckoutInfo(self):
-        log = Logger(f"Checkout Info | {self.ProfileName}").log
+        log = Logger(
+            f"Checkout Info | {self.fileData} | {self.ProfileName}").log
         try:
-            #log(self.questionData, color='blue', file=self.fileDir, messagePrint=True)
+            # log(self.questionData, color='blue', file=self.fileDir, messagePrint=True)
             questionForm = []
             discordData = []
-            for index, i in enumerate(self.questionData):
-                log(i, color='blue', file=self.fileDir, messagePrint=True)
-                try:
-                    if i["type"] == "heading":
-                        question = {
-                            "id": i["id"]
-                        }
-                        discordInfo = {
-                            "name": i["name"],
-                            "answer": ""
-                        }
-                        questionForm.append(question)
-                        discordData.append(discordInfo)
+            if self.questionData != []:
+                for index, i in enumerate(self.questionData):
+                    log(i, color='blue', file=self.fileDir, messagePrint=True)
+                    try:
+                        if i["type"] == "heading":
+                            question = {
+                                "id": i["id"]
+                            }
+                            discordInfo = {
+                                "name": i["name"],
+                                "answer": ""
+                            }
+                            questionForm.append(question)
+                            discordData.append(discordInfo)
 
-                except KeyError as e:
-                    exc_type, exc_obj, exc_tb = sys.exc_info()
-                    filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                    log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=False)
-                    pass 
-                
-                try:
-                    if i["type"] == "check": 
-                        question = {
-                            "id": i["id"],
-                            "answer": True
-                        }
-                        discordInfo = {
-                            "name": i["name"],
-                            "answer": True
-                        }
-                
-                        questionForm.append(question)
-                        discordData.append(discordInfo)
-                    
-                except KeyError as e:
-                    exc_type, exc_obj, exc_tb = sys.exc_info()
-                    filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                    log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=False)
-                    pass 
-                try:
-                    if i["type"] == "select":
-                        if 'top size' in i["name"].lower():
-                            for key in i["options"]:
-                                for k in key.keys():
-                                    if k == self.shirtSize:
-                                        question = {
-                                            "id": self.questionData[index]["id"],
-                                            "answer": k
-                                        }
-                                        discordInfo = {
-                                            "name": self.questionData[index]["name"],
-                                            "answer": k
-                                        }
-                                        questionForm.append(question)
-                                        discordData.append(discordInfo)
-                                        break
-                        
+                    except KeyError as e:
+                        exc_type, exc_obj, exc_tb = sys.exc_info()
+                        filename = os.path.split(
+                            exc_tb.tb_frame.f_code.co_filename)[1]
+                        log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
+                            exc_obj, filename, e), file=self.fileDir, messagePrint=False)
+                        pass
 
-                        elif 'bottom size' in i["name"].lower():
-                            for key in i["options"]:
-                                for k in key.keys():
-                                    if k == self.trouserSize:
-                                        question = {
-                                            "id": self.questionData[index]["id"],
-                                            "answer": k
-                                        }
-                                        discordInfo = {
-                                            "name": self.questionData[index]["name"],
-                                            "answer": k
-                                        }
-                                        questionForm.append(question)
-                                        discordData.append(discordInfo)
-                                        break
+                    try:
+                        if i["type"] == "check":
+                            question = {
+                                "id": i["id"],
+                                "answer": True
+                            }
+                            discordInfo = {
+                                "name": i["name"],
+                                "answer": True
+                            }
 
-                        elif 'nike' in i["name"].lower():
-                           for key in i["options"]:
-                                for k in key.keys():
-                                    if k in self.nikeSize:
-                                        question = {
-                                            "id": self.questionData[index]["id"],
-                                            "answer": k
-                                        }
-                                        discordInfo = {
-                                            "name": self.questionData[index]["name"],
-                                            "answer": k
-                                        }
-                                        questionForm.append(question)
-                                        discordData.append(discordInfo)
-                                        break
-                        elif 'adidas' in i["name"].lower():
-                            for key in i["options"]:
-                                for k in key.keys():
-                                    if k in self.adidasSize:
-                                        question = {
-                                            "id": self.questionData[index]["id"],
-                                            "answer": k
-                                        }
-                                        discordInfo = {
-                                            "name": self.questionData[index]["name"],
-                                            "answer": k
-                                        }
-                                        questionForm.append(question)
-                                        discordData.append(discordInfo)
-                                        break
+                            questionForm.append(question)
+                            discordData.append(discordInfo)
 
-                        elif 'preferred platform' in i["name"].lower():
-                            for key in i["options"]:
-                                for k in key.keys():
-                                    if 'skype' in k.lower():
-                                        question = {
-                                            "id": self.questionData[index]["id"],
-                                            "answer": k
-                                        }
-                                        discordInfo = {
-                                            "name": self.questionData[index]["name"],
-                                            
-                                            "answer": k
-                                        }
-                                        questionForm.append(question)
-                                        discordData.append(discordInfo)
-                                        break
-                        
-                        else:
-                            for key in i["options"]:
-                                key = random.choice(i["options"])
-                                k = list(key.keys())[0]
+                    except KeyError as e:
+                        exc_type, exc_obj, exc_tb = sys.exc_info()
+                        filename = os.path.split(
+                            exc_tb.tb_frame.f_code.co_filename)[1]
+                        log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
+                            exc_obj, filename, e), file=self.fileDir, messagePrint=False)
+                        pass
+                    try:
+                        if i["type"] == "select":
+                            if 'top size' in i["name"].lower():
+                                for key in i["options"]:
+                                    for k in key.keys():
+                                        if k == self.shirtSize:
+                                            question = {
+                                                "id": self.questionData[index]["id"],
+                                                "answer": k
+                                            }
+                                            discordInfo = {
+                                                "name": self.questionData[index]["name"],
+                                                "answer": k
+                                            }
+                                            questionForm.append(question)
+                                            discordData.append(discordInfo)
+                                            break
+
+                            elif 'bottom size' in i["name"].lower():
+                                for key in i["options"]:
+                                    for k in key.keys():
+                                        if k == self.trouserSize:
+                                            question = {
+                                                "id": self.questionData[index]["id"],
+                                                "answer": k
+                                            }
+                                            discordInfo = {
+                                                "name": self.questionData[index]["name"],
+                                                "answer": k
+                                            }
+                                            questionForm.append(question)
+                                            discordData.append(discordInfo)
+                                            break
+
+                            elif 'nike' in i["name"].lower():
+                                for key in i["options"]:
+                                    for k in key.keys():
+                                        if k in self.nikeSize:
+                                            question = {
+                                                "id": self.questionData[index]["id"],
+                                                "answer": k
+                                            }
+                                            discordInfo = {
+                                                "name": self.questionData[index]["name"],
+                                                "answer": k
+                                            }
+                                            questionForm.append(question)
+                                            discordData.append(discordInfo)
+                                            break
+                            elif 'adidas' in i["name"].lower():
+                                for key in i["options"]:
+                                    for k in key.keys():
+                                        if k in self.adidasSize:
+                                            question = {
+                                                "id": self.questionData[index]["id"],
+                                                "answer": k
+                                            }
+                                            discordInfo = {
+                                                "name": self.questionData[index]["name"],
+                                                "answer": k
+                                            }
+                                            questionForm.append(question)
+                                            discordData.append(discordInfo)
+                                            break
+
+                            elif 'preferred platform' in i["name"].lower():
+                                for key in i["options"]:
+                                    for k in key.keys():
+                                        if 'skype' in k.lower():
+                                            question = {
+                                                "id": self.questionData[index]["id"],
+                                                "answer": k
+                                            }
+                                            discordInfo = {
+                                                "name": self.questionData[index]["name"],
+
+                                                "answer": k
+                                            }
+                                            questionForm.append(question)
+                                            discordData.append(discordInfo)
+                                            break
+
+                            else:
+                                for key in i["options"]:
+                                    key = random.choice(i["options"])
+                                    k = list(key.keys())[0]
+                                    question = {
+                                        "id": self.questionData[index]["id"],
+                                        "answer": k
+                                    }
+                                    discordInfo = {
+                                        "name": self.questionData[index]["name"],
+                                        "answer": k
+                                    }
+                                    questionForm.append(question)
+                                    discordData.append(discordInfo)
+                                    break
+
+                    except KeyError as e:
+                        exc_type, exc_obj, exc_tb = sys.exc_info()
+                        filename = os.path.split(
+                            exc_tb.tb_frame.f_code.co_filename)[1]
+                        log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
+                            exc_obj, filename, e), file=self.fileDir, messagePrint=False)
+                        pass
+
+                    try:
+                        if i["type"] == "text_field":
+                            if 'brand' in i["name"].lower():
                                 question = {
-                                    "id": self.questionData[index]["id"],
-                                    "answer": k
+                                    "id": i["id"],
+                                    "answer": self.brandChoices,
                                 }
                                 discordInfo = {
-                                    "name": self.questionData[index]["name"],
-                                    "answer": k
+                                    "name": i["name"],
+                                    "answer": self.brandChoices
                                 }
                                 questionForm.append(question)
                                 discordData.append(discordInfo)
-                                break
-                        
 
-                except KeyError as e:
-                    exc_type, exc_obj, exc_tb = sys.exc_info()
-                    filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                    log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=False)
-                    pass 
-                
-                try:
-                    if i["type"] == "text_field":
-                        if 'brand' in i["name"].lower():
-                            question = {
-                                "id": i["id"],
-                                "answer": self.brandChoices,
-                            }
-                            discordInfo = {
-                                "name": i["name"],
-                                "answer": self.brandChoices
-                            }
-                            questionForm.append(question)
-                            discordData.append(discordInfo)
-                            
-                        elif 'instagram' in i["name"].lower():
-                            question = {
-                                "id": i["id"],
-                                "answer": self.Instagram
-                            }
-                            discordInfo = {
-                                "name": i["name"],
-                                "answer": self.Instagram
-                            }
-                            questionForm.append(question)
-                            discordData.append(discordInfo)
+                            elif 'instagram' in i["name"].lower():
+                                question = {
+                                    "id": i["id"],
+                                    "answer": self.Instagram
+                                }
+                                discordInfo = {
+                                    "name": i["name"],
+                                    "answer": self.Instagram
+                                }
+                                questionForm.append(question)
+                                discordData.append(discordInfo)
 
-                        elif 'arrival' in i["name"].lower():
-                            question = {
-                                "id": i["id"],
-                                "answer": "n/a"
-                            }
-                            discordInfo = {
-                                "name": i["name"],
-                                "answer": "n/a"
-                            }
-                            questionForm.append(question)
-                            discordData.append(discordInfo)
-                        elif 'nike' in i["name"].lower():
-                            question = {
-                                "id": i["id"],
-                                "answer": self.nikeSize
-                            }
-                            discordInfo = {
-                                "name": i["name"],
-                                "answer": self.nikeSize
-                            }
-                            questionForm.append(question)
-                            discordData.append(discordInfo)
-                        
-                        elif 'adidas' in i["name"].lower():
-                            question = {
-                                "id": i["id"],
-                                "answer": self.adidasSize
-                            }
-                            discordInfo = {
-                                "name": i["name"],
-                                "answer": self.adidasSize
-                            }
-                            questionForm.append(question)
-                            discordData.append(discordInfo)
-                        elif 'pre-consultation' in i["name"].lower():
-                            question = {
-                                "id": i["id"],
-                                "answer": "ASAP"
-                            }
-                            discordInfo = {
-                                "name": i["name"],
-                                "answer": "ASAP"
-                            }
-                            questionForm.append(question)
-                            discordData.append(discordInfo)
-                        else:
-                            question = {
-                                "id": i["id"],
-                                "answer": "n/a"
-                            }
-                            discordInfo = {
-                                "name": i["name"],
-                                "answer": "n/a"
-                            }
-                            questionForm.append(question)
-                            discordData.append(discordInfo)
-                            
-                except KeyError as e:
-                    exc_type, exc_obj, exc_tb = sys.exc_info()
-                    filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                    log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=False)
-                    pass 
-        
-            
-            self.questionForm = questionForm
-            log(self.questionForm, file=self.fileDir, messagePrint=True)
-            self.discordData = discordData
-            log(self.discordData, file=self.fileDir, messagePrint=False)
+                            elif 'arrival' in i["name"].lower():
+                                question = {
+                                    "id": i["id"],
+                                    "answer": "n/a"
+                                }
+                                discordInfo = {
+                                    "name": i["name"],
+                                    "answer": "n/a"
+                                }
+                                questionForm.append(question)
+                                discordData.append(discordInfo)
+                            elif 'nike' in i["name"].lower():
+                                question = {
+                                    "id": i["id"],
+                                    "answer": self.nikeSize
+                                }
+                                discordInfo = {
+                                    "name": i["name"],
+                                    "answer": self.nikeSize
+                                }
+                                questionForm.append(question)
+                                discordData.append(discordInfo)
+
+                            elif 'adidas' in i["name"].lower():
+                                question = {
+                                    "id": i["id"],
+                                    "answer": self.adidasSize
+                                }
+                                discordInfo = {
+                                    "name": i["name"],
+                                    "answer": self.adidasSize
+                                }
+                                questionForm.append(question)
+                                discordData.append(discordInfo)
+                            elif 'pre-consultation' in i["name"].lower():
+                                question = {
+                                    "id": i["id"],
+                                    "answer": "ASAP"
+                                }
+                                discordInfo = {
+                                    "name": i["name"],
+                                    "answer": "ASAP"
+                                }
+                                questionForm.append(question)
+                                discordData.append(discordInfo)
+                            else:
+                                question = {
+                                    "id": i["id"],
+                                    "answer": "n/a"
+                                }
+                                discordInfo = {
+                                    "name": i["name"],
+                                    "answer": "n/a"
+                                }
+                                questionForm.append(question)
+                                discordData.append(discordInfo)
+
+                    except KeyError as e:
+                        exc_type, exc_obj, exc_tb = sys.exc_info()
+                        filename = os.path.split(
+                            exc_tb.tb_frame.f_code.co_filename)[1]
+                        log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
+                            exc_obj, filename, e), file=self.fileDir, messagePrint=False)
+                        pass
+
+                self.questionForm = questionForm
+                log(self.questionForm, file=self.fileDir, messagePrint=True)
+                self.discordData = discordData
+                log(self.discordData, file=self.fileDir, messagePrint=False)
 
         except Exception as e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=True) 
-    
+            log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
+                exc_obj, filename, e), file=self.fileDir, messagePrint=True)
+
     def updatePersonalData(self):
-        log = Logger(f"Personal Data | {self.ProfileName}").log
+        log = Logger(
+            f"Personal Data | {self.fileData} | {self.ProfileName}").log
         updatedPersonalData = False
         while updatedPersonalData == False:
             try:
@@ -582,50 +644,59 @@ class SelfridgesBookingCheckout:
                 }
 
                 data = {
-                    "consent":True,
-                    "first_name":self.firstName,
-                    "last_name":self.lastName,
-                    "email":self.Email,
-                    "default_company_id":self.storeID,
-                    "mobile":self.Phone,
-                    "questions":[],
+                    "consent": True,
+                    "first_name": self.firstName,
+                    "last_name": self.lastName,
+                    "email": self.Email,
+                    "default_company_id": self.storeID,
+                    "mobile": self.Phone,
+                    "questions": [],
                     "extra_info":
                     {
-                        "locale":"en"
+                        "locale": "en"
                     }
                 }
                 dataMetric = json.dumps(data, separators=(',', ':'))
-                response = self.s.post(f'https://selfridges.bookingbug.com/api/v1/{self.storeID}/client', headers=headers, data=dataMetric, timeout=45)
-                log(response.request.body, color="yellow", file="Logs/Bookings", messagePrint=False)
+                response = self.s.post(
+                    f'https://selfridges.bookingbug.com/api/v1/{self.storeID}/client', headers=headers, data=dataMetric, timeout=45)
+                log(response.request.body, color="yellow",
+                    file="Logs/Bookings", messagePrint=False)
                 if response.status_code == 201 or response.status_code == '201':
                     jsonData = json.loads(response.text)
                     try:
                         if jsonData["email"] == self.Email:
-                            log("Succesfully added profile as a client!", color='green', file=self.fileDir, messagePrint=True)
+                            log("Succesfully added profile as a client!",
+                                color='green', file=self.fileDir, messagePrint=True)
                             self.profileID = jsonData["id"]
                             self.mobileNoPrefix = jsonData["mobile"]
                             self.mobilePrefix = jsonData["mobile_prefix"]
 
-                            log(f"Succesfully received profileID: {self.profileID}", color='yellow', file=self.fileDir, messagePrint=True)
-                            updatedPersonalData = True 
+                            log(f"Succesfully received profileID: {self.profileID}",
+                                color='yellow', file=self.fileDir, messagePrint=True)
+                            updatedPersonalData = True
 
                     except IndexError or KeyError as e:
-                        log(f"Unsucessfully added profile as a client...", color='red', file=self.fileDir, messagePrint=True)
-                
+                        log(f"Unsucessfully added profile as a client...",
+                            color='red', file=self.fileDir, messagePrint=True)
+
                 elif 500 <= response.status_code <= 599:
-                    log(f"Retrying adding profile as a client: {response.status_code}", color='magenta', file=self.fileDir, messagePrint=True)
+                    log(f"Retrying adding profile as a client: {response.status_code}",
+                        color='magenta', file=self.fileDir, messagePrint=True)
                     continue
 
                 else:
-                    log(f"{response.status_code}\n {response.text}", color='red', file=self.fileDir, messagePrint=True)
-                
+                    log(f"{response.status_code}\n {response.text}",
+                        color='red', file=self.fileDir, messagePrint=True)
+
             except Exception as e:
                 exc_type, exc_obj, exc_tb = sys.exc_info()
                 filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=True)
+                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
+                    exc_obj, filename, e), file=self.fileDir, messagePrint=True)
 
     def cartInformation(self):
-        log = Logger(f"Cart Information | {self.ProfileName}").log
+        log = Logger(
+            f"Cart Information | {self.fileData} | {self.ProfileName}").log
         cartSuccessful = False
         while cartSuccessful == False:
             try:
@@ -648,92 +719,112 @@ class SelfridgesBookingCheckout:
                 )
                 data = {
                     "entire_basket": True,
-                    "items":[
-                    {
-                        "date": self.eventDate,
-                        "time": self.eventSlotTimeNumber,
-                        "event_id": self.eventID,
-                        "price": 0,
-                        "book":f"https://selfridges.bookingbug.com/api/v1/{self.storeID}/basket/add_item?service_id={self.serviceID}",
-                        "id": self.checkoutID,
-                        "duration": self.duration,
-                        "settings": {
-                            "resource":-1,
-                            "person":-1,
-                            "earliest_time": self.eventSlotDate
-                        },
-                        "child_client_ids":[
-                        ],
-                        "questions":self.questionForm,
+                    "items": [
+                        {
+                            "date": self.eventDate,
+                            "time": self.eventSlotTimeNumber,
+                            "event_id": self.eventID,
+                            "price": 0,
+                            "book": f"https://selfridges.bookingbug.com/api/v1/{self.storeID}/basket/add_item?service_id={self.serviceID}",
+                            "id": self.checkoutID,
+                            "duration": self.duration,
+                            "settings": {
+                                "resource": -1,
+                                "person": -1,
+                                "earliest_time": self.eventSlotDate
+                            },
+                            "child_client_ids": [
+                            ],
+                            "questions":self.questionForm,
                             "service_id": self.serviceID,
                             "resource_id":self.resourceID,
                             "person_id":self.personID,
                             "status":self.status,
                             "ref": int(self.referenceID)
-                            }
-                        ]
+                        }
+                    ]
                 }
+                if self.resourceID == None:
+                    del data["resource_id"]
+                if self.serviceID == None:
+                    del data["service_id"]
+                if self.personID == None:
+                    del data["person_id"]
+                if self.status == None:
+                    del data["status"]
+
                 dataMetric = json.dumps(data, separators=(',', ':'))
-                response = self.s.post(f'https://selfridges.bookingbug.com/api/v1/{self.storeID}/basket/add_item', headers=headers, params=params, data=dataMetric, timeout=45)
-                log(response.request.body, color="yellow", file="Logs/Bookings", messagePrint=False)
+                response = self.s.post(
+                    f'https://selfridges.bookingbug.com/api/v1/{self.storeID}/basket/add_item', headers=headers, params=params, data=dataMetric, timeout=45)
+                log(response.request.body, color="yellow",
+                    file="Logs/Bookings", messagePrint=False)
                 if response.status_code == 201 or response.status_code == '201':
                     jsonData = json.loads(response.text)
                     try:
                         if jsonData["_embedded"]["items"][0]["ref"] == int(self.referenceID) or jsonData["_embedded"]["items"][0]["ref"] == self.referenceID:
-                            log(f"Succesfully updated form data at cart: {self.eventName} at {self.eventSlotDate}", color='green', file=self.fileDir, messagePrint=True)
+                            log(f"Succesfully updated form data at cart: {self.eventName} at {self.eventSlotDate}",
+                                color='green', file=self.fileDir, messagePrint=True)
                             responsedata = jsonData["_embedded"]["items"][0]
                             self.checkoutID = responsedata["id"]
-                            log(f"Received updated checkoutID: {self.checkoutID}", color='yellow', file=self.fileDir, messagePrint=True)
-                            cartSuccessful = True 
+                            log(f"Received updated checkoutID: {self.checkoutID}",
+                                color='yellow', file=self.fileDir, messagePrint=True)
+                            cartSuccessful = True
 
                     except IndexError or KeyError as e:
-                        log(f"Unsucessfully updated form data at cart: {self.eventName} at {self.eventSlotDate} {self.eventSlotDate}", color='red', file=self.fileDir, messagePrint=True)
-            
+                        log(f"Unsucessfully updated form data at cart: {self.eventName} at {self.eventSlotDate} {self.eventSlotDate}",
+                            color='red', file=self.fileDir, messagePrint=True)
 
                 elif response.status_code == 409 or response.status_code == '409':
                     jsonData = json.loads(response.text)
                     if jsonData["error"] == 'No Space Left':
-                        log("Time slot unavailable, selecting new time slot...", color='magenta', file=self.fileDir, messagePrint=True)
+                        log("Time slot unavailable, selecting new time slot...",
+                            color='magenta', file=self.fileDir, messagePrint=True)
                         self.getEventTimes()
                         self.cartTimeSlot()
                         continue
 
                     elif jsonData["error"] == 'Min advance time passed':
-                        log("Can't update cart... Time slot too soon, selecting new time slot", color='magenta', file=self.fileDir, messagePrint=True)
+                        log("Can't update cart... Time slot too soon, selecting new time slot",
+                            color='magenta', file=self.fileDir, messagePrint=True)
                         self.dayIncrease = 2
                         self.getEventTimes()
                         self.cartTimeSlot()
                         continue
 
                     else:
-                        log(f"Unknown 409 updating cart... | {response.status_code}\n{response.text}", color='red', file=self.fileDir, messagePrint=True)
+                        log(f"Unknown 409 updating cart... | {response.status_code}\n{response.text}",
+                            color='red', file=self.fileDir, messagePrint=True)
                         self.getEventTimes()
                         self.cartTimeSlot()
                         continue
-                
+
                 elif 500 <= response.status_code <= 599:
-                    log(f"Retrying adding slot information to cart: {response.status_code}", color='magenta', file=self.fileDir, messagePrint=True)
+                    log(f"Retrying adding slot information to cart: {response.status_code}",
+                        color='magenta', file=self.fileDir, messagePrint=True)
                     continue
 
                 else:
-                    log(f"UNKNOWN CART ERROR: {response.status_code}\n {response.text}", color='red', file=self.fileDir, messagePrint=True)
+                    log(f"UNKNOWN CART ERROR: {response.status_code}\n {response.text}",
+                        color='red', file=self.fileDir, messagePrint=True)
                     self.getEventTimes()
                     self.cartTimeSlot()
                     continue
-            
+
             except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as e:
-                        exc_type, exc_obj, exc_tb = sys.exc_info()
-                        filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                        log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), color="red", file=self.fileDir, messagePrint=False)
-                        continue
+                exc_type, exc_obj, exc_tb = sys.exc_info()
+                filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj,
+                    filename, e), color="red", file=self.fileDir, messagePrint=False)
+                continue
 
             except Exception as e:
                 exc_type, exc_obj, exc_tb = sys.exc_info()
                 filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=True)
+                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
+                    exc_obj, filename, e), file=self.fileDir, messagePrint=True)
 
     def checkout(self):
-        log = Logger(f"Checkout | {self.ProfileName}").log
+        log = Logger(f"Checkout | {self.fileData} | {self.ProfileName}").log
         checkedOut = False
         while checkedOut == False:
             try:
@@ -753,79 +844,96 @@ class SelfridgesBookingCheckout:
                 }
 
                 data = {
-                "client":{
-                    "consent":True,
-                    "first_name":self.firstName,
-                    "last_name":self.lastName,
-                    "country":"United Kingdom",
-                    "email":self.Email,
-                    "id":self.profileID,
-                    "notifications":{
-                        
-                    },
-                    "mobile":self.mobileNoPrefix,
-                    "mobile_prefix":self.mobilePrefix,
-                    "questions":[
-                        
-                    ],
-                    "extra_info":{
-                        "locale":"en"
-                    }
-                },
-                "is_admin":False,
-                "items":[
-                    {
-                        "date": self.eventDate,
-                        "time":self.eventSlotTimeNumber,
-                        "event_id":self.eventID,
-                        "price":0,
-                        "book":f"https://selfridges.bookingbug.com/api/v1/{self.storeID}/basket/add_item?service_id={self.serviceID}",
-                        "id":self.checkoutID,
-                        "duration":self.duration,
-                        "settings":{
-                            "resource":-1,
-                            "person":-1,
-                            "earliest_time":self.eventSlotDate
+                    "client": {
+                        "consent": True,
+                        "first_name": self.firstName,
+                        "last_name": self.lastName,
+                        "country": "United Kingdom",
+                        "email": self.Email,
+                        "id": self.profileID,
+                        "notifications": {
+
                         },
-                        "child_client_ids":[
-                            
+                        "mobile": self.mobileNoPrefix,
+                        "mobile_prefix": self.mobilePrefix,
+                        "questions": [
+
                         ],
-                        "questions":self.questionForm,
-                        "service_id":self.serviceID,
-                        "resource_id":self.resourceID,
-                        "person_id":self.personID,
-                        "status":self.status,
-                        "ref": int(self.referenceID)
-                    }
-                ]
+                        "extra_info": {
+                            "locale": "en"
+                        }
+                    },
+                    "is_admin": False,
+                    "items": [
+                        {
+                            "date": self.eventDate,
+                            "time": self.eventSlotTimeNumber,
+                            "event_id": self.eventID,
+                            "price": 0,
+                            "book": f"https://selfridges.bookingbug.com/api/v1/{self.storeID}/basket/add_item?service_id={self.serviceID}",
+                            "id": self.checkoutID,
+                            "duration": self.duration,
+                            "settings": {
+                                "resource": -1,
+                                "person": -1,
+                                "earliest_time": self.eventSlotDate
+                            },
+                            "child_client_ids": [
+
+                            ],
+                            "questions":self.questionForm,
+                            "service_id":self.serviceID,
+                            "resource_id":self.resourceID,
+                            "person_id":self.personID,
+                            "status":self.status,
+                            "ref": int(self.referenceID)
+                        }
+                    ]
                 }
+                if self.resourceID == None:
+                    del data["resource_id"]
+                if self.serviceID == None:
+                    del data["service_id"]
+                if self.personID == None:
+                    del data["person_id"]
+                if self.status == None:
+                    del data["status"]
                 dataMetric = json.dumps(data, separators=(',', ':'))
-                response = self.s.post(f'https://selfridges.bookingbug.com/api/v1/{self.storeID}/basket/checkout', headers=headers, data=dataMetric, timeout=45)
-                log(response.request.body, color="yellow", file="Logs/Bookings", messagePrint=False)
+                response = self.s.post(
+                    f'https://selfridges.bookingbug.com/api/v1/{self.storeID}/basket/checkout', headers=headers, data=dataMetric, timeout=45)
+                log(response.request.body, color="yellow",
+                    file="Logs/Bookings", messagePrint=False)
                 if response.status_code == 201 or response.status_code == '201':
                     jsonData = json.loads(response.text)
                     try:
                         if jsonData["long_id"]:
                             if jsonData["client_name"] == f"{self.firstName} {self.lastName}":
-                                log(f"Succesfully checked out! | {self.eventName} at {self.eventSlotDate}", color='green', file=self.fileDir, messagePrint=True)
+                                log(f"Succesfully checked out! | {self.eventName} at {self.eventSlotDate}",
+                                    color='green', file=self.fileDir, messagePrint=True)
                                 self.formattedEventTime = jsonData["_embedded"]["bookings"][0]["describe"]
                                 self.longCheckoutID = jsonData["long_id"]
-                                checkedOut = True 
-                    
+                                self.bookingsRef = jsonData["_embedded"]["bookings"][0]["id"]
+                                log(response.text, file=self.fileDir,
+                                    messagePrint=False)
+                                checkedOut = True
+
                     except IndexError or KeyError as e:
-                        log(f"Unsucessfully checked out...: {self.eventName} at {self.eventSlotDate} {self.eventSlotDate}\n{response.status_code}\n{response.text}", color='red', file=self.fileDir, messagePrint=True)
+                        log(f"Unsucessfully checked out...: {self.eventName} at {self.eventSlotDate} {self.eventSlotDate}\n{response.status_code}\n{response.text}",
+                            color='red', file=self.fileDir, messagePrint=True)
 
                 elif response.status_code == 409 or response.status_code == '409':
                     jsonData = json.loads(response.text)
                     if jsonData["error"] == 'No Space Left':
-                        log("Time slot unavailable, selecting new time slot...", color='magenta', file=self.fileDir, messagePrint=True)
+                        log("Time slot unavailable, selecting new time slot...",
+                            color='magenta', file=self.fileDir, messagePrint=True)
                         self.getEventTimes()
                         self.cartTimeSlot()
                         self.cartInformation()
                         continue
 
                     elif jsonData["error"] == 'Min advance time passed':
-                        log("Can't checkout... Time slot too soon, selecting new time slot", color='magenta', file=self.fileDir, messagePrint=True)
+                        log("Can't checkout... Time slot too soon, selecting new time slot",
+                            color='magenta', file=self.fileDir, messagePrint=True)
                         self.dayIncrease = 2
                         self.getEventTimes()
                         self.cartTimeSlot()
@@ -833,51 +941,65 @@ class SelfridgesBookingCheckout:
                         continue
 
                     else:
-                        log(f"Unknown 409 checkout error... | {response.status_code}\n{response.text}", color='red', file=self.fileDir, messagePrint=True)
+                        log(f"Unknown 409 checkout error... | {response.status_code}\n{response.text}",
+                            color='red', file=self.fileDir, messagePrint=True)
                         self.getEventTimes()
                         self.cartTimeSlot()
                         self.cartInformation()
                         continue
 
                 elif 500 <= response.status_code <= 599:
-                    log(f"Retrying checkout: {response.status_code}", color='magenta', file=self.fileDir, messagePrint=True)
+                    log(f"Retrying checkout: {response.status_code}",
+                        color='magenta', file=self.fileDir, messagePrint=True)
                     continue
 
                 else:
-                    log(f"UNKNOWN CHECKOUT ERROR | {response.status_code}\n{response.text}", color='red', file=self.fileDir, messagePrint=True)
+                    log(f"UNKNOWN CHECKOUT ERROR | {response.status_code}\n{response.text}",
+                        color='red', file=self.fileDir, messagePrint=True)
                     self.getEventTimes()
                     self.cartTimeSlot()
                     self.cartInformation()
                     continue
-            
+
             except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as e:
                 exc_type, exc_obj, exc_tb = sys.exc_info()
                 filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), color="red", file=self.fileDir, messagePrint=False)
+                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj,
+                    filename, e), color="red", file=self.fileDir, messagePrint=False)
                 continue
-                                   			
+
             except Exception as e:
                 exc_type, exc_obj, exc_tb = sys.exc_info()
                 filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=True)
-    
+                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
+                    exc_obj, filename, e), file=self.fileDir, messagePrint=True)
+
     def webhookPosted(self):
-        log = Logger(f"Webhook | {self.ProfileName}").log
+        log = Logger(f"Webhook | {self.fileData} | {self.ProfileName}").log
         try:
             hook = self.webhook()
-            embed = Webhook(hook, username="Selfridges Bookings Checkout", avatar_url=self.storeImage, color=3619134)
-            embed.set_title(title=f"{self.storeName} | {self.eventName}", url=self.eventURL)
-            #embed.add_field(name="Successful Booking!", value="", inline=False)
+            embed = Webhook(hook, username="Selfridges Bookings Checkout",
+                            avatar_url=self.storeImage, color=3619134)
+            embed.set_title(
+                title=f"{self.storeName} | {self.eventName}", url=self.eventURL)
+            # embed.add_field(name="Successful Booking!", value="", inline=False)
 
-
-            embed.add_field(name="Store", value=f"{self.storeName}", inline=False)
-            embed.add_field(name="Profile Name", value=f"{self.ProfileName}", inline=True)
-            embed.add_field(name="Full Name", value=f"||{self.firstName} {self.lastName}||", inline=True)
-            embed.add_field(name="Email", value=f"||{self.Email}||", inline=True)
-            embed.add_field(name="Phone Number", value=f"||{self.Phone}||", inline=True)
-            embed.add_field(name="TimeSlot", value=f"||{self.formattedEventTime}||", inline=True)
-            embed.add_field(name="Duration", value=f"{self.duration} minutes", inline=True)
-            embed.add_field(name="Checkout ID", value=f"{self.longCheckoutID}", inline=False)
+            embed.add_field(
+                name="Store", value=f"{self.storeName}", inline=False)
+            embed.add_field(name="Profile Name",
+                            value=f"{self.ProfileName}", inline=True)
+            embed.add_field(
+                name="Full Name", value=f"||{self.firstName} {self.lastName}||", inline=True)
+            embed.add_field(
+                name="Email", value=f"||{self.Email}||", inline=True)
+            embed.add_field(name="Phone Number",
+                            value=f"||{self.Phone}||", inline=True)
+            embed.add_field(
+                name="TimeSlot", value=f"||{self.formattedEventTime}||", inline=True)
+            embed.add_field(name="Duration",
+                            value=f"{self.duration} minutes", inline=True)
+            embed.add_field(name="Booking Reference",
+                            value=f"||{self.bookingsRef}||", inline=False)
 
             descList = []
             for i, data in enumerate(self.discordData, start=1):
@@ -886,44 +1008,49 @@ class SelfridgesBookingCheckout:
             descList = "\n".join(descList)
             embed.add_field(name="Questions", value=descList, inline=False)
             embed.set_thumbnail(self.storeImage)
-            embed.set_footer(text='Selfridges Bookings Bot | agNotify', icon='https://cdn.discordapp.com/attachments/564554184410529802/756198795683037364/agnotify.png', ts=True)
+            embed.set_footer(text='Selfridges Bookings Bot | agNotify',
+                             icon='https://cdn.discordapp.com/attachments/564554184410529802/756198795683037364/agnotify.png', ts=True)
             embed.post()
 
-        
         except Exception as e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=True)  
-   
+            log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
+                exc_obj, filename, e), file=self.fileDir, messagePrint=True)
+
     def webhook(self):
-        hook = hooks.pop(0)
-        hooks.append(hook)
+        hook = self.hooks.pop(0)
+        self.hooks.append(hook)
         return hook
-    
+
     def saveData(self):
-        log = Logger(self.ProfileName).log
+        log = Logger(f"Saving Data | {self.fileData} | {self.ProfileName}").log
         try:
-            log(f"{self.storeName},{self.eventName}, {self.formattedEventTime}, {self.duration}, {self.checkoutID}, {self.referenceID} | {self.firstName},{self.lastName}, {self.Email}, {self.Phone}, {self.discordData}, {self.questionForm}", color='yellow', file="Logs/FinalSaved.txt", messagePrint=False)
-        
+            log(f"{self.storeName},{self.eventName}, {self.formattedEventTime}, {self.duration}, {self.checkoutID}, {self.referenceID}, {self.bookingsRef} | {self.firstName},{self.lastName}, {self.Email}, {self.Phone}, {self.discordData}, {self.questionForm}",
+                color='yellow', file="Logs/FinalSaved.txt", messagePrint=False)
+
         except Exception as e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=True)
+            log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
+                exc_obj, filename, e), file=self.fileDir, messagePrint=True)
+
 
 class SelfridgesMonitor:
     def __init__(self, proxy=None):
-        self.proxy = proxy 
+        self.proxy = proxy
         self.fileDir = "Logs/Selfridges/Monitor"
-        self.storeID = "37375"
+        self.storeID = "37510"
+        # "37453"
         self.url = f"https://selfridges.bookingbug.com//api/v1/{str(self.storeID)}/services/?exclude_links[]=child_services"
-    
+
     def createSession(self):
         self.s = requests.session()
         if self.proxy == None:
             pass
         else:
-            self.s.proxies.update(self.proxy) 
-    
+            self.s.proxies.update(self.proxy)
+
     def getEvents(self):
         log = Logger("Monitor | getEvents").log
         gotEvent = False
@@ -939,40 +1066,48 @@ class SelfridgesMonitor:
                     'referer': 'https://bookings.selfridges.com/',
                     'accept-language': 'en-GB,en;q=0.9,en-US;q=0.8',
                 }
-                log("Submitting... get request!", color='yellow', file=self.fileDir, messagePrint=True)
+                log("Submitting... get request!", color='yellow',
+                    file=self.fileDir, messagePrint=True)
                 response = self.s.get(self.url, headers=headers)
-                log("Submitted get request!", color='yellow', file=self.fileDir, messagePrint=True)
+                log("Submitted get request!", color='yellow',
+                    file=self.fileDir, messagePrint=True)
                 if response.status_code == 200 or response.status_code == '200':
                     eventData = json.loads(response.text)
                     eventData = eventData["_embedded"]["services"]
                     eventList = []
                     for event in eventData:
-                        #if 'wedding' in event["name"].lower() or 'tyds' in event["name"].lower():
-                        if any(word in ['mystery','tyds','wedding', 'bag', 'appointment'] for word in event["name"].lower().split()):
+                        # if 'wedding' in event["name"].lower() or 'tyds' in event["name"].lower():
+                        if any(word in ['mystery', 'tyds', 'wedding', 'bag', 'appointment', 'meeting'] for word in event["name"].lower().split()):
                             eventList.append(event)
                             self.eventData = eventList
-                            log(f'Filtered event found, adding to filtered list!: {event["name"]}', color='green', file=self.fileDir, messagePrint=True)
+                            log(f'Filtered event found, adding to filtered list!: {event["name"]}',
+                                color='green', file=self.fileDir, messagePrint=True)
                             gotEvent = True
 
                         else:
-                            log(f'Non filtered event found!: {event["name"]}', color='magenta', file=self.fileDir, messagePrint=True)
+                            log(f'Non filtered event found!: {event["name"]}',
+                                color='magenta', file=self.fileDir, messagePrint=True)
 
                 elif response.status_code == 404 or response.status_code == '404':
                     eventData = json.loads(response.text)
                     if eventData["error"] == "Not Found":
-                        log("No Events loaded...", file=self.fileDir, messagePrint=True)
-                
+                        log("No Events loaded...",
+                            file=self.fileDir, messagePrint=True)
+
                 elif 500 <= response.status_code <= 599:
-                    log(f"Retrying request statuse code: {response.status_code}", file=self.fileDir, messagePrint=True)
+                    log(f"Retrying request statuse code: {response.status_code}",
+                        file=self.fileDir, messagePrint=True)
                     continue
 
                 else:
-                    log(f"Unknown response code: {response.status_code}\n{response.text}, {response.url}", file=self.fileDir, messagePrint=True)
-            
+                    log(f"Unknown response code: {response.status_code}\n{response.text}, {response.url}",
+                        file=self.fileDir, messagePrint=True)
+
             except Exception as e:
                 exc_type, exc_obj, exc_tb = sys.exc_info()
                 filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=True)
+                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
+                    exc_obj, filename, e), file=self.fileDir, messagePrint=True)
                 log(response.status_code, messagePrint=True)
 
     def getInfo(self):
@@ -980,18 +1115,22 @@ class SelfridgesMonitor:
         gottenInfo = False
         while gottenInfo == False:
             try:
-                #print(len(self.eventData))
+                # print(len(self.eventData))
                 eventMetaDataList = []
                 for index, event in enumerate(self.eventData):
                     eventName = event["name"]
                     serviceID = event["id"]
                     eventDescription = event["description"]
                     bookingTimeStep = event["booking_time_step"]
-                    eventPrice = event["price"]
+                    try:
+                        eventPrice = event["price"]
+                    except KeyError:
+                        eventPrice = [x for x in event["prices"]][index]
                     questionUrl = event["_links"]["questions"]["href"]
 
                     if eventPrice <= 0:
-                        log("Event price is fine bro", color="green", file=self.fileDir, messagePrint=True)
+                        log("Event price is fine bro", color="green",
+                            file=self.fileDir, messagePrint=True)
                         headers = {
                             'Host': 'selfridges.bookingbug.com',
                             'accept': 'application/hal+json,application/json',
@@ -1002,7 +1141,8 @@ class SelfridgesMonitor:
                             'referer': 'https://bookings.selfridges.com/',
                             'accept-language': 'en-GB,en;q=0.9,en-US;q=0.8',
                         }
-                        response = self.s.get(questionUrl, headers=headers, allow_redirects=False)
+                        response = self.s.get(
+                            questionUrl, headers=headers, allow_redirects=False)
                         if 200 <= response.status_code <= 299:
                             jsonData = json.loads(response.text)
                             eventDataList = []
@@ -1011,9 +1151,9 @@ class SelfridgesMonitor:
                                 questionName = data["name"]
                                 questionID = data["id"]
                                 detailType = data["detail_type"]
-                                #eventDataList.append(questionName)
-                                #eventDataList.append(questionID)
-                                #eventDataList.append(detailType)
+                                # eventDataList.append(questionName)
+                                # eventDataList.append(questionID)
+                                # eventDataList.append(detailType)
                                 if detailType == "select":
                                     try:
                                         options = data["options"]
@@ -1023,19 +1163,19 @@ class SelfridgesMonitor:
                                             optionID = option["id"]
                                             optionDict[optionName] = optionID
                                             optionList.append(optionDict)
-                                        #eventDataList.append(optionList)        
+                                        # eventDataList.append(optionList)
                                     except KeyError or TypeError:
-                                        pass 
-                                
+                                        pass
+
                                 questionsDict = {
-                                        "index": index,
-                                        "name": questionName,
-                                        "id": questionID,
-                                        "type": detailType,
-                                        "options": optionList
+                                    "index": index,
+                                    "name": questionName,
+                                    "id": questionID,
+                                    "type": detailType,
+                                    "options": optionList
                                 }
                                 eventDataList.append(questionsDict)
-                            
+
                             eventMetaData = {
                                 "Event Name": eventName,
                                 "Store ID": self.storeID,
@@ -1045,26 +1185,31 @@ class SelfridgesMonitor:
                                 "Question URL": questionUrl,
                                 "Question Data": eventDataList
                             }
-                            #jsonData = json.loads(eventMetaData)
-                            #jsonData = json.dumps(eventMetaData, indent=4)
-                            #print(eventMetaData)
+                            # jsonData = json.loads(eventMetaData)
+                            # jsonData = json.dumps(eventMetaData, indent=4)
+                            # print(eventMetaData)
                             eventMetaDataList.append(eventMetaData)
                             gottenInfo = True
 
                         elif 400 <= response.status_code <= 599:
-                            log(f"Retrying request status code: {response.status_code}", file=self.fileDir, messagePrint=True)
+                            log(f"Retrying request status code: {response.status_code}",
+                                file=self.fileDir, messagePrint=True)
                             continue
                     else:
-                        log("Event price is too expensive bro, gettoutta here...", color="red", file=self.fileDir, messagePrint=True)
+                        log("Event price is too expensive bro, gettoutta here...",
+                            color="red", file=self.fileDir, messagePrint=True)
                         pass
-                    
+
                 return eventMetaDataList
 
             except Exception as e:
                 exc_type, exc_obj, exc_tb = sys.exc_info()
                 filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=True)
-                           
+                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
+                    exc_obj, filename, e), file=self.fileDir, messagePrint=True)
+                break
+
+
 def monitor():
     monitorInstance = SelfridgesMonitor()
     monitorInstance.createSession()
@@ -1072,8 +1217,10 @@ def monitor():
     eventData = monitorInstance.getInfo()
     return eventData
 
-def bookings(eventData, profile):
-    bookingsInstance = SelfridgesBookingCheckout(profile, data=eventData)
+
+def bookings(eventData, profile, file):
+    bookingsInstance = SelfridgesBookingCheckout(
+        profile, data=eventData, fileData=file)
     bookingsInstance.timesIndex()
     bookingsInstance.setCheckoutInfo()
     bookingsInstance.createSession()
@@ -1085,28 +1232,37 @@ def bookings(eventData, profile):
     bookingsInstance.webhookPosted()
     bookingsInstance.saveData()
 
-def main():
-    log = Logger("Main").log 
-    try:
-        with open("Profiles/agNotify.json", "r") as f:
-            jsonProfiles = json.load(f)
-            log(f"{len(jsonProfiles)} Selfridges Profile(s) loaded... ", color="blue", file="Logs/Monitor", messagePrint=True)
-        
-        eventsData = monitor()
 
+def run(jsonProfiles, file, eventsData):
+    log = Logger("Main").log
+    try:
+        log(f"{len(jsonProfiles)} Selfridges Profile(s) loaded... for {file}",
+            color="blue", file="Logs/Monitor", messagePrint=True)
         for profile in jsonProfiles:
             for eventData in eventsData:
-                Thread(target=bookings, args=[eventData, profile]).start()
+                Thread(target=bookings, args=[
+                       eventData, profile, file]).start()
 
     except Exception as e:
         exc_type, exc_obj, exc_tb = sys.exc_info()
         filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-        log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file="Logs/Monitor", messagePrint=True)
+        log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
+            exc_obj, filename, e), file="Logs/Monitor", messagePrint=True)
+
 
 if __name__ == "__main__":
-    Path("Profiles/").mkdir(parents=True, exist_ok=True)
+    Path("Profiles/Sheets").mkdir(parents=True, exist_ok=True)
     Path("Logs/Selfridges/").mkdir(parents=True, exist_ok=True)
-
-    hooks = [x.strip() for x in open("webhooks.txt").readlines()]
-    main()
-    pass
+    eventsData = monitor()
+    absolutePath = Path().absolute()
+    text_files = [f for f in os.listdir(
+        f"{absolutePath}/Profiles") if f.endswith('.json')]
+    for file in text_files:
+        if file.startswith('$'):
+            pass
+        else:
+            with open(f"Profiles/{file}", "r") as f:
+                jsonProfiles = json.load(f)
+            p = multiprocessing.Process(
+                target=run, args=[jsonProfiles, file, eventsData])
+            p.start()
