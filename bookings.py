@@ -117,7 +117,7 @@ class SelfridgesBookingCheckout:
         while gottenEventTimes == False:
             try:
                 startDate = (date.today() + timedelta(days=self.dayIncrease))
-                endDate = (startDate + timedelta(days=7))
+                endDate = (startDate + timedelta(days=14))
                 log(f"{startDate} {endDate}",
                     file=self.fileDir, messagePrint=False)
                 url = f"https://selfridges.bookingbug.com/api/v1/{self.storeID}/time_data?service_id={self.serviceID}&date={startDate}&end_date={endDate}&duration={self.duration}"
@@ -135,8 +135,7 @@ class SelfridgesBookingCheckout:
                     'Referer': 'https://bookings.selfridges.com/',
                     'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
                 }
-                response = self.s.get(
-                    url, headers=headers, allow_redirects=False, timeout=45)
+                response = self.s.get(url, headers=headers, allow_redirects=False, timeout=45)
                 if 200 <= response.status_code <= 299:
                     log("Get request for event times successfully sent!",
                         file=self.fileDir, messagePrint=False)
@@ -227,9 +226,11 @@ class SelfridgesBookingCheckout:
 
                     self.timeslotTries += 1
                 else:
-                    log(
-                        f"No preferences matched after 15 tries, selecting first available time!: {eventSlotTimeNumber}", color='yellow', file=self.fileDir, messagePrint=True)
+                    log(f"No preferences matched after 15 tries, selecting first available time!: {eventSlotTimeNumber}", color='yellow', file=self.fileDir, messagePrint=True)
+                    timeSlotData = random.choice(self.eventTimeSlots)
+                    self.eventTimeSlots.remove(timeSlotData)
                     gotSuitableTime = True
+
                     return timeSlotData
 
             except Exception as e:
@@ -248,9 +249,8 @@ class SelfridgesBookingCheckout:
                 self.eventSlotTimeNumber = int(timeSlotData["slotTimeNumber"])
                 self.eventID = timeSlotData["Event ID"]
                 self.eventDate = timeSlotData["Event Date"]
-                self.eventSlotDate = timeSlotData["slotDate"].replace(
-                    "+", ".000Z").split("Z")[0] + "Z"
-                self.referenceID = f"10{random.randint(11111111, 99999999)}"
+                self.eventSlotDate = timeSlotData["slotDate"].replace("+", ".000Z").split("Z")[0] + "Z"
+                self.referenceID = f"1{random.randint(11111111, 99999999)}"
                 log(f"Set, eventSlotTimeNumber: {self.eventSlotTimeNumber} | eventID: {self.eventID} | eventDate: {self.eventDate} | eventSlotDate: {self.eventSlotDate} | referenceID: {self.referenceID}", file=self.fileDir, messagePrint=False)
 
                 headers = {
@@ -292,8 +292,7 @@ class SelfridgesBookingCheckout:
                 dataMetric = json.dumps(data, separators=(',', ':'))
                 log(f"Submitting slot time to cart... {dataMetric}",
                     file=self.fileDir, messagePrint=False)
-                response = self.s.post(
-                    f'https://selfridges.bookingbug.com/api/v1/{self.storeID}/basket/add_item', headers=headers, params=params, data=dataMetric)
+                response = self.s.post(f'https://selfridges.bookingbug.com/api/v1/{self.storeID}/basket/add_item', headers=headers, params=params, data=dataMetric)
                 # log(response.request.body, color="yellow", file="Logs/Bookings", messagePrint=False)
                 if response.status_code == 201 or response.status_code == '201':
                     self.authTokenHeader = response.headers["Auth-Token"]
@@ -336,8 +335,7 @@ class SelfridgesBookingCheckout:
                 elif response.status_code == 409 or response.status_code == '409':
                     jsonData = json.loads(response.text)
                     if jsonData["error"] == 'No Space Left':
-                        log("Time slot unavailable, selecting new time slot...",
-                            color='magenta', file=self.fileDir, messagePrint=True)
+                        log("Time slot unavailable, selecting new time slot...", color='magenta', file=self.fileDir, messagePrint=True)
                         self.getEventTimes()
                         continue
 
@@ -659,8 +657,7 @@ class SelfridgesBookingCheckout:
                 dataMetric = json.dumps(data, separators=(',', ':'))
                 response = self.s.post(
                     f'https://selfridges.bookingbug.com/api/v1/{self.storeID}/client', headers=headers, data=dataMetric, timeout=45)
-                log(response.request.body, color="yellow",
-                    file="Logs/Bookings", messagePrint=False)
+                log(response.request.body, color="yellow", file=self.fileDir, messagePrint=False)
                 if response.status_code == 201 or response.status_code == '201':
                     jsonData = json.loads(response.text)
                     try:
@@ -756,8 +753,7 @@ class SelfridgesBookingCheckout:
                 dataMetric = json.dumps(data, separators=(',', ':'))
                 response = self.s.post(
                     f'https://selfridges.bookingbug.com/api/v1/{self.storeID}/basket/add_item', headers=headers, params=params, data=dataMetric, timeout=45)
-                log(response.request.body, color="yellow",
-                    file="Logs/Bookings", messagePrint=False)
+                log(f"Added data to cart: {response.request.body}", color="yellow", file=self.fileDir, messagePrint=False)
                 if response.status_code == 201 or response.status_code == '201':
                     jsonData = json.loads(response.text)
                     try:
@@ -901,8 +897,7 @@ class SelfridgesBookingCheckout:
                 dataMetric = json.dumps(data, separators=(',', ':'))
                 response = self.s.post(
                     f'https://selfridges.bookingbug.com/api/v1/{self.storeID}/basket/checkout', headers=headers, data=dataMetric, timeout=45)
-                log(response.request.body, color="yellow",
-                    file="Logs/Bookings", messagePrint=False)
+                log("Checkout data log: {response.request.body}", color="yellow",file=self.fileDir, messagePrint=False)
                 if response.status_code == 201 or response.status_code == '201':
                     jsonData = json.loads(response.text)
                     try:
@@ -1008,15 +1003,13 @@ class SelfridgesBookingCheckout:
             descList = "\n".join(descList)
             embed.add_field(name="Questions", value=descList, inline=False)
             embed.set_thumbnail(self.storeImage)
-            embed.set_footer(text='Selfridges Bookings Bot | agNotify',
-                             icon='https://cdn.discordapp.com/attachments/564554184410529802/756198795683037364/agnotify.png', ts=True)
+            embed.set_footer(text='Selfridges Bookings Bot | agNotify', icon='https://cdn.discordapp.com/attachments/564554184410529802/756198795683037364/agnotify.png', ts=True)
             embed.post()
 
         except Exception as e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
-                exc_obj, filename, e), file=self.fileDir, messagePrint=True)
+            log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=True)
 
     def webhook(self):
         hook = self.hooks.pop(0)
@@ -1026,23 +1019,21 @@ class SelfridgesBookingCheckout:
     def saveData(self):
         log = Logger(f"Saving Data | {self.fileData} | {self.ProfileName}").log
         try:
-            log(f"{self.storeName},{self.eventName}, {self.formattedEventTime}, {self.duration}, {self.checkoutID}, {self.referenceID}, {self.bookingsRef} | {self.firstName},{self.lastName}, {self.Email}, {self.Phone}, {self.discordData}, {self.questionForm}",
-                color='yellow', file="Logs/FinalSaved.txt", messagePrint=False)
+            log(f"{self.storeName},{self.eventName}, {self.formattedEventTime}, {self.duration}, {self.checkoutID}, {self.referenceID}, {self.bookingsRef} | {self.firstName},{self.lastName}, {self.Email}, {self.Phone}, {self.discordData}, {self.questionForm}", color='yellow', file="Logs/Selfridges/Bookings/checkout.log", messagePrint=False)
 
         except Exception as e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
-                exc_obj, filename, e), file=self.fileDir, messagePrint=True)
+            log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=True)
 
 
 class SelfridgesMonitor:
     def __init__(self, proxy=None):
         self.proxy = proxy
-        self.fileDir = "Logs/Selfridges/Monitor"
+        self.fileDir = "Logs/Selfridges/Bookings/monitor.log"
         self.storeID = "37510"
         # "37453"
-        self.url = f"https://selfridges.bookingbug.com//api/v1/{str(self.storeID)}/services/?exclude_links[]=child_services"
+        self.url = f"https://selfridges.bookingbug.com//api/v1/{self.storeID}/services/?exclude_links[]=child_services"
 
     def createSession(self):
         self.s = requests.session()
@@ -1056,6 +1047,7 @@ class SelfridgesMonitor:
         gotEvent = False
         while gotEvent == False:
             try:
+
                 headers = {
                     'Host': 'selfridges.bookingbug.com',
                     'accept': 'application/hal+json,application/json',
@@ -1091,7 +1083,7 @@ class SelfridgesMonitor:
                 elif response.status_code == 404 or response.status_code == '404':
                     eventData = json.loads(response.text)
                     if eventData["error"] == "Not Found":
-                        log("No Events loaded...",
+                        log(f"No Events loaded... :{self.storeID} - {response.text}",
                             file=self.fileDir, messagePrint=True)
 
                 elif 500 <= response.status_code <= 599:
@@ -1219,8 +1211,7 @@ def monitor():
 
 
 def bookings(eventData, profile, file):
-    bookingsInstance = SelfridgesBookingCheckout(
-        profile, data=eventData, fileData=file)
+    bookingsInstance = SelfridgesBookingCheckout(profile, data=eventData, fileData=file)
     bookingsInstance.timesIndex()
     bookingsInstance.setCheckoutInfo()
     bookingsInstance.createSession()
@@ -1236,8 +1227,7 @@ def bookings(eventData, profile, file):
 def run(jsonProfiles, file, eventsData):
     log = Logger("Main").log
     try:
-        log(f"{len(jsonProfiles)} Selfridges Profile(s) loaded... for {file}",
-            color="blue", file="Logs/Monitor", messagePrint=True)
+        log(f"{len(jsonProfiles)} Selfridges Profile(s) loaded... for {file}", color="blue", file="Logs/Selfridges/Bookings/main.log", messagePrint=True)
         for profile in jsonProfiles:
             for eventData in eventsData:
                 Thread(target=bookings, args=[
@@ -1246,13 +1236,12 @@ def run(jsonProfiles, file, eventsData):
     except Exception as e:
         exc_type, exc_obj, exc_tb = sys.exc_info()
         filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-        log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
-            exc_obj, filename, e), file="Logs/Monitor", messagePrint=True)
+        log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file="Logs/Selfridges/Bookings/main.log", messagePrint=True)
 
 
 if __name__ == "__main__":
     Path("Profiles/Sheets").mkdir(parents=True, exist_ok=True)
-    Path("Logs/Selfridges/").mkdir(parents=True, exist_ok=True)
+    Path("Logs/Selfridges/Bookings").mkdir(parents=True, exist_ok=True)
     eventsData = monitor()
     absolutePath = Path().absolute()
     text_files = [f for f in os.listdir(
