@@ -182,41 +182,49 @@ class SelfridgesBookingMonitor:
             log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=self.fileDir, messagePrint=True)
    
     def webhookPost(self, hookData, microDataJson):
-        try:
-            log = Logger("Webhook").log
-            Client = hookData["Client"]
-            HookName = hookData["Hook Name"]
-            HookFooter = hookData["Hook Footer"]
-            HookColour = hookData["Hook Colour"]
-            HookIcon = hookData["Hook Icon URL"]
-            Hooks = hookData["Webhooks"]
-            hook = self.webhook(Hooks)
-            CustomMessage = hookData["Custom Message"]
+        postedHook = False
+        while postedHook == False:
+            try:
+                log = Logger("Webhook").log
+                Client = hookData["Client"]
+                HookName = hookData["Hook Name"]
+                HookFooter = hookData["Hook Footer"]
+                HookColour = hookData["Hook Colour"]
+                HookIcon = hookData["Hook Icon URL"]
+                Hooks = hookData["Webhooks"]
+                hook = self.webhook(Hooks)
+                CustomMessage = hookData["Custom Message"]
 
-            embed = Webhook(hook, username=HookName, avatar_url=self.storeImage, content=CustomMessage, color=HookColour)
+                embed = Webhook(hook, username=HookName, avatar_url=self.storeImage, content=CustomMessage, color=HookColour)
 
-            if self.eventType == "New": embed.set_title(title="{} Bookings - NEW EVENT FOUND".format(self.storeName), url=self.eventURL)
-            elif self.eventType == "Restock": embed.set_title(title="{} Bookings".format(self.storeName), url=self.eventURL)
+                if self.eventType == "New": embed.set_title(title="{} Bookings - NEW EVENT FOUND".format(self.storeName), url=self.eventURL)
+                elif self.eventType == "Restock": embed.set_title(title="{} Bookings - RESTOCK".format(self.storeName), url=self.eventURL)
 
-            embed.add_field(name="Event Name",value=microDataJson["eventName"], inline=True)
-            embed.add_field(name="Duration", value=str(microDataJson["bookingTimeStep"]) + " minutes", inline=True)
-            price = microDataJson["eventPrice"]
-            
-            if price == 0 or price == '0':
-                price = "Complimentary"
-            elif price == None:
-                price = microDataJson["eventPrices"][0]
+                embed.add_field(name="Event Name",value=microDataJson["eventName"], inline=True)
+                embed.add_field(name="Duration", value=str(microDataJson["bookingTimeStep"]) + " minutes", inline=True)
+                price = microDataJson["eventPrice"]
+                
+                if price == 0 or price == '0':
+                    price = "Complimentary"
+                elif price == None:
+                    price = microDataJson["eventPrices"][0]
+                else:
+                    price = int(price)
+                    price = price / 100.00
+                    price = f"£{price}"
+                
 
-            embed.add_field(name="Price", value=price, inline=True)
-            embed.set_thumbnail(self.storeImage)
-            embed.set_footer(text=HookFooter, icon=HookIcon, ts=True)
-            embed.post()
-            return True
+                embed.add_field(name="Price", value=price, inline=True)
+                embed.set_thumbnail(self.storeImage)
+                embed.set_footer(text=HookFooter, icon=HookIcon, ts=True)
+                embed.post()
+                return True
 
-        except Exception as e:
-            exc_type, exc_obj, exc_tb = sys.exc_info()
-            filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=fileDir, messagePrint=True)
+            except Exception as e:
+                exc_type, exc_obj, exc_tb = sys.exc_info()
+                filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file=fileDir, messagePrint=True)
+                continue
 
     def webhook(self, Hooks):
         hook = Hooks.pop(0)
@@ -256,5 +264,5 @@ def main():
 if __name__ == "__main__":
     pathLog = "Logs/Selfridges/Monitoring"
     Path(pathLog).mkdir(parents=True, exist_ok=True)
-    fileDir = pathLog + "monitor.log"
+    fileDir = pathLog + "/monitor.log"
     main()
