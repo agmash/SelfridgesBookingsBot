@@ -6,7 +6,7 @@ from collections import defaultdict
 from .logger import Logger
 from pathlib import Path
 
-Path("Logs/").mkdir(parents=True, exist_ok=True)
+Path("Logs/Discord/").mkdir(parents=True, exist_ok=True)
 
 class Webhook:
 	def __init__(self, url, **kwargs):
@@ -144,7 +144,7 @@ class Webhook:
 			#print(result.status_code)
 
 			if result.status_code == 204:
-				log("Webhook Posted", color="green", file="Logs/discord.txt", messagePrint=True) 
+				log("Webhook Posted", color="green", file="Logs/Discord/discord.log", messagePrint=True) 
 				posted = True
 				time.sleep(0.5)
 			else:
