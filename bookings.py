@@ -1032,7 +1032,7 @@ class SelfridgesMonitor:
         self.proxy = proxy
         self.fileDir = "Logs/Selfridges/Bookings/monitor.log"
         self.storeID = "37510"
-        # "37453"
+        #"37453"
         self.url = f"https://selfridges.bookingbug.com//api/v1/{self.storeID}/services/?exclude_links[]=child_services"
 
     def createSession(self):
@@ -1230,22 +1230,19 @@ def run(jsonProfiles, file, eventsData):
         log(f"{len(jsonProfiles)} Selfridges Profile(s) loaded... for {file}", color="blue", file="Logs/Selfridges/Bookings/main.log", messagePrint=True)
         for profile in jsonProfiles:
             for eventData in eventsData:
-                Thread(target=bookings, args=[
-                       eventData, profile, file]).start()
+                Thread(target=bookings, args=[eventData, profile, file]).start()
 
     except Exception as e:
         exc_type, exc_obj, exc_tb = sys.exc_info()
         filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
         log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno, exc_obj, filename, e), file="Logs/Selfridges/Bookings/main.log", messagePrint=True)
 
-
 if __name__ == "__main__":
     Path("Profiles/Sheets").mkdir(parents=True, exist_ok=True)
     Path("Logs/Selfridges/Bookings").mkdir(parents=True, exist_ok=True)
     eventsData = monitor()
     absolutePath = Path().absolute()
-    text_files = [f for f in os.listdir(
-        f"{absolutePath}/Profiles") if f.endswith('.json')]
+    text_files = [f for f in os.listdir(f"{absolutePath}/Profiles") if f.endswith('.json')]
     for file in text_files:
         if file.startswith('~$'):
             pass
