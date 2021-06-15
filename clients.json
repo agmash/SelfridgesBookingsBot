@@ -6,15 +6,15 @@
         "Hook Colour": 3619134,
         "Hook Icon URL": "https://cdn.discordapp.com/attachments/564554184410529802/756198795683037364/agnotify.png",
         "Webhooks" : ["https://discord.com/api/webhooks/831976919620255785/3-TxJpeApi4nsRs5eBt3mBpvdidRytxa1Wf-VSmzITVtGw8shWXmbKMwOIATDSsdjZA7"], 
-        "Custom Message": "@everyone"
+        "Custom Message": "@here"
     },
     {
         "Client": "EEZY",
         "Hook Name": "Selfridges Bookings",
         "Hook Footer":"EEZY Selfridges Bookings Monitor | agmash#0001", 
         "Hook Colour": 6227124,
-        "Hook Icon URL": "https://cdn.shopify.com/s/files/1/0039/0096/4953/products/4063698800471_01_1024x1024.jpg",
+        "Hook Icon URL": "https://i.imgur.com/0gB58Hj.png",
         "Webhooks" : ["https://discord.com/api/webhooks/849002025210609785/LJepq7ZjRg5ixYVMU9jzcHytoizZ-z2oAiOzbQ1ctLUwVGwpz56Moj77jomYDD2m7P9g"], 
-        "Custom Message": "@everyone"
+        "Custom Message": "@here"
     }
 ]
