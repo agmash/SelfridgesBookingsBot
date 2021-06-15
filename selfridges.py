@@ -1,8 +1,10 @@
-import requests, json, time, os, sys
+import requests, json, time, os, sys, concurrent.futures
+
 from Classes.discord_hooks import Webhook
 from pathlib import Path 
 from Classes.logger import Logger
 from threading import Thread
+
 
 class SelfridgesBookingMonitor:
     def __init__(self, eventsJson, index):
@@ -59,7 +61,7 @@ class SelfridgesBookingMonitor:
                                     jsonData = json.load(f)
                                     i = jsonData[self.jsonIndex]
                                     if i["currentActiveEvents"] == []:
-                                        log("No Events loaded...", file=self.fileDir, messagePrint=True)
+                                        log(f"No Events loaded... {self.storeID} - {response.text}", file=self.fileDir, messagePrint=True)
                                         gotEvent = True 
                                         pass 
                                     else:
@@ -243,18 +245,33 @@ def openEventsJson():
         filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
         log("Exception | {}, {}, {}, {}".format(exc_type, exc_tb.tb_lineno, e, filename), file=fileDir, messagePrint=True)
 
+
+def startInstance(eventsJsons):
+    log = Logger("Start Instance").log
+    try:
+        eventsJson = eventsJsons["evensJson"]
+        index = eventsJsons["index"]
+        instance = SelfridgesBookingMonitor(eventsJson, index)
+        response = instance.getEvents()
+        if response == True:
+            instance.findEvents()
+        else:
+            pass
+    except Exception as e:
+        exc_type, exc_obj, exc_tb = sys.exc_info()
+        filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+        log("Exception | {}, {}, {}, {}".format(exc_type, exc_tb.tb_lineno, e, filename), file=fileDir, messagePrint=True)
+
 def main():
     log = Logger("Main Function").log
     try:
         while True:
             eventsJsons = openEventsJson()
-            for index, eventsJson in enumerate(eventsJsons):
-                instance = SelfridgesBookingMonitor(eventsJson, index)
-                response = instance.getEvents()
-                if response == True:
-                    instance.findEvents()
-                else:
-                    pass
+            eventsJsons = list(map(lambda x: {'evensJson': x[1], 'index': x[0]}, enumerate(eventsJsons)))
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                executor.map(startInstance, eventsJsons)
+
 
     except Exception as e:
         exc_type, exc_obj, exc_tb = sys.exc_info()
