@@ -148,6 +148,6 @@ class Webhook:
 				posted = True
 				time.sleep(0.5)
 			else:
-				log(f"Post Failed, Error {result.status_code} - {result.text} | {self.json}!", color="red", file="Logs/discord.txt", messagePrint=True) 
+				log(f"Post Failed, Error {result.status_code} - {result.text} | {self.json}!", color="red", file="Logs/Discord/discord.log", messagePrint=True) 
 				time.sleep(5)
 				continue
