@@ -969,7 +969,8 @@ class SelfridgesBookingCheckout:
                 log("{}, {}, {}, {} - {}".format(exc_type, exc_tb.tb_lineno,
                     exc_obj, filename, e), file=self.fileDir, messagePrint=True)
 
-    def webhookPosted(self):
+    def webhookPosted(self, start=None, finish=None):
+        print(finish, start)
         log = Logger(f"Webhook | {self.fileData} | {self.ProfileName}").log
         try:
             hook = self.webhook()
@@ -1001,6 +1002,10 @@ class SelfridgesBookingCheckout:
                 dataFormat = f"**{i}. {data['name']}**\n{data['answer']}"
                 descList.append(dataFormat)
             descList = "\n".join(descList)
+            if start != None:
+                checkoutTime = (finish-start)
+                embed.add_field(name="Checkout Time", value=f"{str(checkoutTime)}s", inline=False)
+
             embed.add_field(name="Questions", value=descList, inline=False)
             embed.set_thumbnail(self.storeImage)
             embed.set_footer(text='Selfridges Bookings Bot | agNotify', icon='https://cdn.discordapp.com/attachments/564554184410529802/756198795683037364/agnotify.png', ts=True)
@@ -1209,8 +1214,8 @@ def monitor():
     eventData = monitorInstance.getInfo()
     return eventData
 
-
 def bookings(eventData, profile, file):
+    start = time.perf_counter()
     bookingsInstance = SelfridgesBookingCheckout(profile, data=eventData, fileData=file)
     bookingsInstance.timesIndex()
     bookingsInstance.setCheckoutInfo()
@@ -1220,7 +1225,8 @@ def bookings(eventData, profile, file):
     bookingsInstance.updatePersonalData()
     bookingsInstance.cartInformation()
     bookingsInstance.checkout()
-    bookingsInstance.webhookPosted()
+    finish = time.perf_counter()
+    bookingsInstance.webhookPosted(start, finish)
     bookingsInstance.saveData()
 
 
