@@ -1,0 +1,31 @@
+[
+    {
+        "storeName": "The Yellow Drop",
+        "storeImage": "https://images.selfridges.com/is/image/selfridges/2103_TYDS_LOGO?qlt=100&fmt=jpg&scl=1",
+        "storeID": "37463",
+        "totalActiveEvents": [],
+        "oldEvents": [
+        ],
+        "currentActiveEvents": []
+    },
+    {
+        "storeName": "Offspring",
+        "storeImage": "https://images.selfridges.com/is/image/selfridges/2104_APPT_OFFSPRING?qlt=100&fmt=jpg&scl=1",
+        "storeID": "37453",
+        "totalActiveEvents": [],
+        "oldEvents": [
+            {
+                "eventName": "Offspring Mystery Collection",
+                "eventID": 54112,
+                "eventDiscription": "Missed out on Offspring�s lockdown launches? Fear not: you can book an appointment for a second chance to get your hands on some of this season�s biggest drops. You will only be given access to a product with an in-store appointment, and it will be limited to one pair per customer in your specified size only. All lines are subject to availability and stock is limited so there are no guarantees on specific styles and sizes. Good luck!\r\n\r\nFor your health and wellbeing, all in-store appointments will be carried out under strict social distancing guidelines.",
+                "eventDurations": [
+                    "15"
+                ],
+                "eventPrices": [
+                    "0"
+                ]
+            }
+        ],
+        "currentActiveEvents": []
+    }
+]
