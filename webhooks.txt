@@ -1,10 +1,1 @@
-https://discordapp.com/api/webhooks/849002025210609785/LJepq7ZjRg5ixYVMU9jzcHytoizZ-z2oAiOzbQ1ctLUwVGwpz56Moj77jomYDD2m7P9g
-https://discordapp.com/api/webhooks/853000765203283999/ik5BF1F-n8QLZpISGFA8-bttlDkHWOYvHH4QyHHeyrChXfNiXnGGjAtIVt11QrvfFovP
-https://discordapp.com/api/webhooks/853000947189415969/xPaXYayt3T1TCkWOpuhGJXMCFawV0ZZwh8nToOfu5de06_AxhS3RNmnMYQT0JXT0mT-4
-https://discordapp.com/api/webhooks/853001101677690900/MjBgYniRhfem0Ze0_mOO6jrIs7BTTr12NLrDOEngDFo1sewhNrDvc2F1qe2W7KLGsCno
-https://discordapp.com/api/webhooks/853001162257203260/4d5aWw7NR2QECOGLXc321aspkAVa8d2y5kqLuq5kSW2VNtE-HVeSl0rd3OBf8zmioWZW
-https://discordapp.com/api/webhooks/853001208561401876/0fOXbmp7hrran8ObqRRza4hBAtiyW82oORe-dD9upeuia2yGSGwZXftgikKTv8YO7kF_
-https://discordapp.com/api/webhooks/853001319006994473/oYZBgesv1ryxJo7UIBpSQNzwG_9SVv2BLMa22BHZFYCdoeiWrFEoE6JQbehpP3kP9f2E
-https://discordapp.com/api/webhooks/853001375374245888/spgL8CZpTR1VgJRvfXQyvSMs9Pa_neex-14ZZ_MlhitywjYMT5sjJQF5zYhsWObYyDWR
-https://discordapp.com/api/webhooks/853001424278913065/Q_7_rr435U7ou9MJ7wjjKyq_Rwrz_3767vdOC8tuZI8YgpqfqEDsSY-_aINHcVnPi2Xr
-https://discordapp.com/api/webhooks/853001482537140285/bg6aCf6xfYBhXorzCoCwgP2F6eV1D9XnXZCRorHJWBHJRG0RR4HkD3FCvuXK0tIpj8dh
+https://discordapp.com/api/webhooks/<>/<>
